@@ -30,15 +30,28 @@ export async function getServices(): Promise<Service[]> {
     }
 
     try {
-        const response = await fetch(`${WEB_APP_URL}?action=getServices`);
-        if (!response.ok) {
-            throw new Error(`Erro HTTP: ${response.status}`);
+        const getUrl = `${WEB_APP_URL}?action=getServices`;
+        // Tenta via GET primeiro
+        const response = await fetch(getUrl, { method: 'GET' });
+        if (response.ok) {
+            const data = await response.json();
+            return data;
         }
-        const data = await response.json();
-        return data;
+
+        // Fallback: alguns Apps Script aceitam apenas POST
+        const postResponse = await fetch(WEB_APP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'getServices' })
+        });
+        if (!postResponse.ok) {
+            throw new Error(`Erro HTTP: ${postResponse.status}`);
+        }
+        const postData = await postResponse.json();
+        return postData;
     } catch (error) {
         console.error('Erro ao buscar serviços da planilha:', error);
-        throw new Error('Não foi possível conectar à planilha Google. Verifique se a URL do Web App está correta e se o script foi implantado com as permissões corretas.');
+        throw new Error('Não foi possível conectar à planilha Google. Verifique o deploy do Web App (Execute as Me; Access: Anyone) e libere CORS.');
     }
 }
 
