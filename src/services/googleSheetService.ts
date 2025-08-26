@@ -3,7 +3,7 @@ import type { Service } from '../types';
 // IMPORTANTE: Substitua a string abaixo pela URL real do seu Web App do Google Apps Script.
 // Você obtém essa URL na "Parte 2, Passo 5" do arquivo README.md.
 // Enquanto a URL não for alterada, o aplicativo usará dados de mock para demonstração.
-export const WEB_APP_URL: string = 'https://script.google.com/macros/s/AKfycbxhnPlNOW1fd2jHtJkVFyLnavi_8Dm-0W5CNKzjMbq_9G-fCERVx54g_voglXPEGHxCqg/exec';
+export const WEB_APP_URL: string = 'https://script.google.com/macros/s/AKfycbylpL8GyyD8VohVKbROiBJ1MnHY7wJP7JbNeub1kbX0HP0avLoQdYzpZ85ZPfbWxU4Bzg/exec';
 
 // --- Funções de Mock para demonstração ---
 // Esta seção permite que o aplicativo funcione sem uma planilha real configurada.
