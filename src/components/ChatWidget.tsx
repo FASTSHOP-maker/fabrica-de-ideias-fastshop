@@ -2,8 +2,9 @@ import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MessageCircle, Send, X, Bot, User, Loader2 } from "lucide-react";
+import { MessageCircle, Send, X, Bot, User, Loader2, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface Message {
   id: number;
@@ -14,6 +15,8 @@ interface Message {
 
 export const ChatWidget = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [showConfig, setShowConfig] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState(localStorage.getItem('ai_webhook_url') || '');
   const [messages, setMessages] = useState<Message[]>([
     {
       id: 1,
@@ -24,6 +27,7 @@ export const ChatWidget = () => {
   ]);
   const [currentMessage, setCurrentMessage] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const { toast } = useToast();
 
   const exampleQuestions = [
     "Quais são nossas ideias mais promissoras?",
@@ -35,6 +39,17 @@ export const ChatWidget = () => {
   const handleSendMessage = async () => {
     if (!currentMessage.trim() || isTyping) return;
 
+    // Verificar se webhook está configurado
+    if (!webhookUrl) {
+      setShowConfig(true);
+      toast({
+        title: "Configuração necessária",
+        description: "Configure a URL do webhook N8N/Make para conectar com a IA",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const userMessage: Message = {
       id: Date.now(),
       type: 'user',
@@ -43,20 +58,62 @@ export const ChatWidget = () => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const messageToSend = currentMessage;
     setCurrentMessage('');
     setIsTyping(true);
 
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      console.log("Enviando mensagem para webhook:", webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: messageToSend,
+          timestamp: new Date().toISOString(),
+          session_id: `session_${Date.now()}`,
+          context: "fabrica_ideias_chat"
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro HTTP: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
       const aiResponse: Message = {
         id: Date.now() + 1,
         type: 'ai',
-        content: getAIResponse(currentMessage),
+        content: data.response || data.message || "Recebi sua mensagem, mas não consegui gerar uma resposta adequada.",
         timestamp: new Date()
       };
+      
       setMessages(prev => [...prev, aiResponse]);
+      
+    } catch (error) {
+      console.error("Erro ao enviar mensagem para webhook:", error);
+      
+      // Fallback para resposta local em caso de erro
+      const aiResponse: Message = {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: getAIResponse(messageToSend),
+        timestamp: new Date()
+      };
+      
+      setMessages(prev => [...prev, aiResponse]);
+      
+      toast({
+        title: "Erro na conexão",
+        description: "Usando resposta local. Verifique a URL do webhook.",
+        variant: "destructive",
+      });
+    } finally {
       setIsTyping(false);
-    }, 1500 + Math.random() * 1000);
+    }
   };
 
   const getAIResponse = (question: string): string => {
@@ -85,6 +142,17 @@ export const ChatWidget = () => {
     setCurrentMessage(question);
   };
 
+  const handleSaveWebhook = () => {
+    if (webhookUrl.trim()) {
+      localStorage.setItem('ai_webhook_url', webhookUrl.trim());
+      setShowConfig(false);
+      toast({
+        title: "Configuração salva",
+        description: "URL do webhook configurada com sucesso!",
+      });
+    }
+  };
+
   if (!isOpen) {
     return (
       <Button
@@ -98,7 +166,9 @@ export const ChatWidget = () => {
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
-      <Card className="w-96 h-[500px] bg-white shadow-2xl border-0 flex flex-col">
+      <Card className={cn("w-96 bg-white shadow-2xl border-0 flex flex-col", 
+        showConfig ? "h-[580px]" : "h-[500px]"
+      )}>
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-primary-dark p-4 rounded-t-lg flex items-center justify-between">
           <div className="flex items-center space-x-2">
@@ -107,18 +177,56 @@ export const ChatWidget = () => {
             </div>
             <div>
               <h3 className="text-white font-semibold">Assistente IA</h3>
-              <p className="text-white/80 text-sm">Consultor de Inovação</p>
+              <p className="text-white/80 text-sm">
+                {webhookUrl ? 'Conectado via N8N/Make' : 'Modo Local'}
+              </p>
             </div>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsOpen(false)}
-            className="text-white hover:bg-white/20"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center space-x-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowConfig(!showConfig)}
+              className="text-white hover:bg-white/20"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsOpen(false)}
+              className="text-white hover:bg-white/20"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
+
+        {/* Configuration Panel */}
+        {showConfig && (
+          <div className="p-4 bg-muted border-b">
+            <h4 className="font-medium text-sm mb-2">Configuração do Webhook</h4>
+            <p className="text-xs text-muted-foreground mb-3">
+              Digite a URL do webhook do seu fluxo N8N ou Make para conectar com a IA:
+            </p>
+            <div className="space-y-2">
+              <Input
+                placeholder="https://seu-webhook-url.com/webhook"
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                className="text-sm"
+              />
+              <div className="flex space-x-2">
+                <Button onClick={handleSaveWebhook} size="sm" className="flex-1">
+                  Salvar
+                </Button>
+                <Button variant="outline" onClick={() => setShowConfig(false)} size="sm">
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 p-4 overflow-y-auto space-y-4">
