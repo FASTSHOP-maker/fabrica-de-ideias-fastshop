@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Loader2, Lightbulb, Sparkles, Send } from "lucide-react";
+import { Loader2, Lightbulb, Sparkles, Send, Settings } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 const clusters = [
   "Casa Inteligente",
@@ -17,6 +18,7 @@ const clusters = [
 ];
 
 export const IdeaGeneratorSection = () => {
+  const { toast } = useToast();
   const [ideaInput, setIdeaInput] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -27,20 +29,70 @@ export const IdeaGeneratorSection = () => {
   });
   const [selectedCluster, setSelectedCluster] = useState("");
   const [creatorName, setCreatorName] = useState("");
+  const [showWebhookConfig, setShowWebhookConfig] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState(localStorage.getItem('ai_webhook_url') || '');
 
   const handleAnalyzeIdea = async () => {
     if (!ideaInput.trim()) return;
     
+    // Verificar se webhook está configurado
+    if (!webhookUrl) {
+      setShowWebhookConfig(true);
+      toast({
+        title: "Configuração necessária",
+        description: "Configure a URL do webhook N8N/Make para conectar com a IA",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsAnalyzing(true);
-    // Simulate AI analysis
-    setTimeout(() => {
+    
+    try {
+      const { analyzeIdea } = await import('@/services/aiGateway');
+      const analysis = await analyzeIdea(ideaInput);
+      
+      setAnalyzedIdea({
+        benefit: analysis.beneficio,
+        target: analysis.publico,
+        businessModel: analysis.modelo
+      });
+      
+      toast({
+        title: "Análise concluída",
+        description: "Sua ideia foi analisada com sucesso!",
+      });
+      
+    } catch (error) {
+      console.error("Erro ao analisar ideia:", error);
+      
+      // Fallback para análise simulada
       setAnalyzedIdea({
         benefit: "Redução de custos operacionais e melhoria da experiência do usuário através de automação inteligente",
         target: "Empresas de médio e grande porte que buscam otimização de processos e redução de custos",
         businessModel: "SaaS (Software as a Service) com modelo de assinatura mensal baseado no número de usuários"
       });
+      
+      let errorMessage = "Usando análise local. Verifique a URL do webhook.";
+      if (error instanceof Error) {
+        if (error.message === 'WEBHOOK_NOT_CONFIGURED') {
+          errorMessage = "Configure a URL do webhook para conectar com a IA.";
+          setShowWebhookConfig(true);
+        } else if (error.message === 'TIMEOUT') {
+          errorMessage = "Timeout na análise. Usando fallback local.";
+        } else if (error.message === 'INVALID_RESPONSE_FORMAT') {
+          errorMessage = "Resposta da IA em formato inválido. Usando fallback local.";
+        }
+      }
+      
+      toast({
+        title: "Erro na análise",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
       setIsAnalyzing(false);
-    }, 2000);
+    }
   };
 
   const handleSubmitIdea = async () => {
@@ -53,7 +105,23 @@ export const IdeaGeneratorSection = () => {
       setAnalyzedIdea({ benefit: "", target: "", businessModel: "" });
       setSelectedCluster("");
       setCreatorName("");
+      
+      toast({
+        title: "Ideia adicionada",
+        description: "Sua ideia foi adicionada à base com sucesso!",
+      });
     }, 1000);
+  };
+
+  const handleSaveWebhook = () => {
+    if (webhookUrl.trim()) {
+      localStorage.setItem('ai_webhook_url', webhookUrl.trim());
+      setShowWebhookConfig(false);
+      toast({
+        title: "Configuração salva",
+        description: "URL do webhook configurada com sucesso!",
+      });
+    }
   };
 
   return (
@@ -74,12 +142,47 @@ export const IdeaGeneratorSection = () => {
 
         <Card className="bg-gradient-to-br from-background to-muted/20 shadow-xl">
           <CardHeader>
-            <CardTitle className="text-xl font-semibold flex items-center">
-              <Sparkles className="h-5 w-5 mr-2 text-accent" />
-              Descreva sua ideia
+            <CardTitle className="text-xl font-semibold flex items-center justify-between">
+              <div className="flex items-center">
+                <Sparkles className="h-5 w-5 mr-2 text-accent" />
+                Descreva sua ideia
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowWebhookConfig(!showWebhookConfig)}
+                className="text-muted-foreground hover:text-accent"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Webhook Configuration Panel */}
+            {showWebhookConfig && (
+              <div className="p-4 bg-muted/50 rounded-lg border border-muted">
+                <h4 className="font-medium text-sm mb-2">Configuração do Webhook</h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Configure a URL do webhook do seu fluxo N8N ou Make para análise inteligente:
+                </p>
+                <div className="space-y-2">
+                  <Input
+                    placeholder="https://seu-webhook-url.com/webhook"
+                    value={webhookUrl}
+                    onChange={(e) => setWebhookUrl(e.target.value)}
+                    className="text-sm"
+                  />
+                  <div className="flex space-x-2">
+                    <Button onClick={handleSaveWebhook} size="sm" className="flex-1">
+                      Salvar
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowWebhookConfig(false)} size="sm">
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             {/* Idea Input */}
             <div className="space-y-2">
               <Label htmlFor="idea-input" className="text-sm font-medium">

@@ -71,3 +71,110 @@ Yes, you can!
 To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
 
 Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+
+## AI Integration with N8N/Make
+
+This application integrates with external AI services through webhooks using N8N or Make.com for intelligent idea analysis and chat assistance.
+
+### Webhook Configuration
+
+The app uses a single webhook endpoint to handle two different AI assistants:
+
+1. **Help Assistant** (`help_assistant_v1`) - For general questions and help
+2. **Idea Assistant** (`idea_assistant_v1`) - For analyzing business ideas
+
+### Payload Structure
+
+#### Chat Messages (Help Assistant)
+```json
+{
+  "message": "User's question",
+  "assistant_id": "help_assistant_v1",
+  "session_id": "session_1234567890",
+  "conversation_id": "uuid-v4",
+  "source": "fabrica_ideias",
+  "route": "chat_help",
+  "correlation_id": "uuid-v4",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "context": "fabrica_ideias_chat"
+}
+```
+
+Expected response:
+```json
+{
+  "response": "AI's text response"
+}
+```
+
+#### Idea Analysis (Idea Assistant)
+```json
+{
+  "message": "Analise esta ideia de negócio: \"ideia do usuário\"",
+  "assistant_id": "idea_assistant_v1",
+  "session_id": "session_1234567890",
+  "conversation_id": "uuid-v4",
+  "source": "fabrica_ideias",
+  "route": "idea_analysis",
+  "correlation_id": "uuid-v4",
+  "timestamp": "2024-01-01T12:00:00.000Z",
+  "response_schema": {
+    "type": "object",
+    "properties": {
+      "beneficio": { "type": "string", "description": "Benefício principal da ideia" },
+      "publico": { "type": "string", "description": "Público-alvo identificado" },
+      "modelo": { "type": "string", "description": "Modelo de negócio sugerido" }
+    },
+    "required": ["beneficio", "publico", "modelo"]
+  }
+}
+```
+
+Expected response:
+```json
+{
+  "beneficio": "Benefício principal identificado pela IA",
+  "publico": "Público-alvo sugerido pela IA",
+  "modelo": "Modelo de negócio recomendado pela IA"
+}
+```
+
+### N8N/Make Flow Setup
+
+1. **Webhook Trigger**: Configure to receive POST requests
+2. **Switch/Router Node**: Route based on `assistant_id`:
+   - `help_assistant_v1` → Chat processing flow
+   - `idea_assistant_v1` → Idea analysis flow
+3. **LLM Integration**: Connect to your preferred LLM service (OpenAI, Claude, etc.)
+4. **Response Formatting**: Ensure responses match the expected format above
+
+### Security Considerations
+
+- The app supports optional `X-Webhook-Token` header for authentication
+- Store webhook token in localStorage as `ai_webhook_token`
+- Configure CORS properly in your N8N/Make webhook
+- Use HTTPS endpoints for production
+
+### Prompt Examples for LLM
+
+#### For Idea Analysis:
+```
+Você é um especialista em análise de negócios. Analise a seguinte ideia e retorne APENAS um JSON válido no formato:
+
+{
+  "beneficio": "Descreva o principal benefício desta ideia em 1-2 frases",
+  "publico": "Identifique o público-alvo ideal em 1-2 frases", 
+  "modelo": "Sugira o melhor modelo de negócio em 1-2 frases"
+}
+
+Ideia: [IDEA_TEXT]
+
+Importante: Retorne APENAS o JSON, sem texto adicional.
+```
+
+#### For Chat Help:
+```
+Você é um assistente especializado na "Fábrica de Ideias", uma plataforma de gestão de portfólio de inovação. Responda perguntas sobre ideias, análises, clusters estratégicos e insights do portfólio de forma amigável e útil.
+
+Pergunta: [USER_MESSAGE]
+```

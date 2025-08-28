@@ -63,38 +63,20 @@ export const ChatWidget = () => {
     setIsTyping(true);
 
     try {
-      console.log("Enviando mensagem para webhook:", webhookUrl);
-      
-      const response = await fetch(webhookUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: messageToSend,
-          timestamp: new Date().toISOString(),
-          session_id: `session_${Date.now()}`,
-          context: "fabrica_ideias_chat"
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro HTTP: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const { sendChatMessage } = await import('@/services/aiGateway');
+      const aiContent = await sendChatMessage(messageToSend);
       
       const aiResponse: Message = {
         id: Date.now() + 1,
         type: 'ai',
-        content: data.response || data.message || "Recebi sua mensagem, mas não consegui gerar uma resposta adequada.",
+        content: aiContent,
         timestamp: new Date()
       };
       
       setMessages(prev => [...prev, aiResponse]);
       
     } catch (error) {
-      console.error("Erro ao enviar mensagem para webhook:", error);
+      console.error("Erro ao enviar mensagem via AI Gateway:", error);
       
       // Fallback para resposta local em caso de erro
       const aiResponse: Message = {
@@ -106,9 +88,19 @@ export const ChatWidget = () => {
       
       setMessages(prev => [...prev, aiResponse]);
       
+      let errorMessage = "Usando resposta local. Verifique a URL do webhook.";
+      if (error instanceof Error) {
+        if (error.message === 'WEBHOOK_NOT_CONFIGURED') {
+          errorMessage = "Configure a URL do webhook para conectar com a IA.";
+          setShowConfig(true);
+        } else if (error.message === 'TIMEOUT') {
+          errorMessage = "Timeout na conexão. Tente novamente.";
+        }
+      }
+      
       toast({
         title: "Erro na conexão",
-        description: "Usando resposta local. Verifique a URL do webhook.",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
